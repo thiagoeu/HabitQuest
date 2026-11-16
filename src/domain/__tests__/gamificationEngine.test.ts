@@ -1,0 +1,125 @@
+import {
+  calculateXpGain,
+  getRequiredXPForLevel,
+  applyXpGain,
+  revertXpGain,
+  calculateAttributeLevel,
+  processHabitCompletion,
+  revertHabitCompletion,
+  evaluateMissedHabits,
+  createInitialProfile,
+  BASE_XP,
+} from '../gamificationEngine';
+import { Habit, CheckInRecord } from '../../types';
+
+describe('gamificationEngine', () => {
+  const mockHabit: Habit = {
+    id: 'h-1',
+    title: 'Estudar Programacao',
+    category: 'intelecto',
+    difficulty: 'medio',
+    daysOfWeek: [1, 2, 3, 4, 5],
+    reminderEnabled: false,
+    currentStreak: 0,
+    bestStreak: 0,
+    createdAt: new Date().toISOString(),
+  };
+
+  test('calcula XP base e streak bonus corretamente', () => {
+    expect(calculateXpGain('facil', 0)).toBe(15);
+    expect(calculateXpGain('medio', 0)).toBe(30);
+    expect(calculateXpGain('dificil', 0)).toBe(50);
+
+    // Com streak >= 3 dias, aplica 20% de bonus
+    expect(calculateXpGain('facil', 3)).toBe(18); // 15 * 1.2 = 18
+    expect(calculateXpGain('medio', 3)).toBe(36); // 30 * 1.2 = 36
+    expect(calculateXpGain('dificil', 4)).toBe(60); // 50 * 1.2 = 60
+  });
+
+  test('aplica ganho de XP e sobe de nivel quando atinge o limite', () => {
+    // Level 1 precisa de 100 XP
+    const r1 = applyXpGain(1, 0, 50);
+    expect(r1.level).toBe(1);
+    expect(r1.currentXP).toBe(50);
+    expect(r1.leveledUp).toBe(false);
+
+    const r2 = applyXpGain(1, 80, 40); // total 120 -> sobe para nivel 2 com 20 XP
+    expect(r2.level).toBe(2);
+    expect(r2.currentXP).toBe(20);
+    expect(r2.leveledUp).toBe(true);
+  });
+
+  test('reverte XP e nivel corretamente ao desfazer check-in', () => {
+    const reverted = revertXpGain(2, 20, 40);
+    expect(reverted.level).toBe(1);
+    expect(reverted.currentXP).toBe(80);
+  });
+
+  test('calcula nivel de atributo a cada 150 pontos', () => {
+    expect(calculateAttributeLevel(0)).toBe(1);
+    expect(calculateAttributeLevel(149)).toBe(1);
+    expect(calculateAttributeLevel(150)).toBe(2);
+    expect(calculateAttributeLevel(300)).toBe(3);
+  });
+
+  test('processa conclusao de habito incrementando streak, XP, atributo e HP', () => {
+    const profile = createInitialProfile();
+    const result = processHabitCompletion(profile, mockHabit);
+
+    expect(result.newStreak).toBe(1);
+    expect(result.newBestStreak).toBe(1);
+    expect(result.updatedProfile.currentXP).toBe(30);
+    expect(result.updatedProfile.attributes.intelecto.points).toBe(30);
+    expect(result.updatedProfile.attributes.forca.points).toBe(0);
+    expect(result.checkInRecord.xpGained).toBe(30);
+  });
+
+  test('recupera vida em Segunda Chance e limpa flag', () => {
+    const profile = {
+      ...createInitialProfile(),
+      hp: 0,
+      inSecondChance: true,
+    };
+
+    const result = processHabitCompletion(profile, mockHabit);
+    expect(result.updatedProfile.hp).toBe(30);
+    expect(result.updatedProfile.inSecondChance).toBe(false);
+  });
+
+  test('aplica penalidade por metas perdidas e ativa Segunda Chance se HP chegar a zero', () => {
+    const profile = {
+      ...createInitialProfile(),
+      hp: 15,
+    };
+
+    // 2 metas perdidas = 20 de dano, HP vai a 0
+    const { updatedProfile, hpLost, activatedSecondChance } = evaluateMissedHabits(profile, 2);
+    expect(hpLost).toBe(20);
+    expect(updatedProfile.hp).toBe(0);
+    expect(activatedSecondChance).toBe(true);
+    expect(updatedProfile.inSecondChance).toBe(true);
+  });
+
+  test('reverte check-in estornando os pontos exatos do registro', () => {
+    const initialProfile = createInitialProfile();
+    const { updatedProfile, checkInRecord, newStreak } = processHabitCompletion(initialProfile, mockHabit);
+
+    const fullRecord: CheckInRecord = {
+      id: 'rec-1',
+      habitId: mockHabit.id,
+      date: '2026-11-16',
+      completedAt: new Date().toISOString(),
+      ...checkInRecord,
+    };
+
+    const habitWithStreak: Habit = {
+      ...mockHabit,
+      currentStreak: newStreak,
+    };
+
+    const reverted = revertHabitCompletion(updatedProfile, habitWithStreak, fullRecord);
+    expect(reverted.revertedStreak).toBe(0);
+    expect(reverted.updatedProfile.currentXP).toBe(0);
+    expect(reverted.updatedProfile.attributes.intelecto.points).toBe(0);
+  });
+});
