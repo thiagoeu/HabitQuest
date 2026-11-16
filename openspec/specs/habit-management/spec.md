@@ -6,11 +6,19 @@ Permite que o usuario cadastre, organize, edite e registre a conclusao diaria de
 ## Requirements
 
 ### Requirement: Criacao de habito personalizado
-O sistema SHALL permitir que o usuario crie um novo habito informando titulo, categoria de atributo (Intelecto, Forca/Saude ou Disciplina), nivel de dificuldade (Facil, Medio ou Dificil), dias da semana programados e horario opcional de lembrete.
+O sistema SHALL permitir que o usuario crie um novo habito informando titulo, categoria de atributo (Intelecto, Forca/Saude ou Disciplina), nivel de dificuldade (Facil, Medio ou Dificil), dias da semana programados, periodo opcional de vigencia no calendario (data inicial e data final) e horario estritamente opcional de despertador/lembrete.
 
 #### Scenario: Cadastro de habito com dados validos
 - **WHEN** o usuario preenche o titulo "Estudar React Native", seleciona a categoria "Intelecto", dificuldade "Medio" e salva
 - **THEN** o sistema persiste o habito localmente e o exibe na lista de metas dos dias correspondentes
+
+#### Scenario: Cadastro de habito com periodo delimitado de calendario
+- **WHEN** o usuario define uma meta com data de inicio "2026-11-20" e data de fim "2026-11-30"
+- **THEN** o sistema persiste o intervalo e ativa a meta apenas dentro dessas datas nos dias da semana escolhidos
+
+#### Scenario: Cadastro de habito sem definir horario
+- **WHEN** o usuario cria uma meta deixando o horario de despertador desativado
+- **THEN** o sistema salva o habito normalmente sem exigir informacao de horario
 
 #### Scenario: Tentativa de cadastro sem titulo
 - **WHEN** o usuario tenta salvar um habito com o campo de titulo vazio
@@ -39,8 +47,19 @@ O sistema SHALL permitir que o usuario marque um habito programado para o dia at
 - **THEN** o sistema reverte o estado do habito para pendente no dia atual e estorna os pontos correspondentes daquele check-in
 
 ### Requirement: Listagem de metas do dia
-O sistema SHALL apresentar na tela principal os habitos programados para o dia da semana atual, separando visualmente as metas pendentes das metas ja concluidas no dia.
+O sistema SHALL apresentar na tela principal os habitos programados para o dia da semana atual que estejam dentro do periodo de vigencia definido (entre a data de inicio e a data de termino, quando configuradas), separando visualmente as metas pendentes das metas ja concluidas no dia.
 
 #### Scenario: Visualizacao das metas diarias ao abrir o aplicativo
 - **WHEN** o usuario abre o aplicativo em uma segunda-feira
-- **THEN** o sistema lista apenas os habitos configurados para segunda-feira (ou todos os dias), indicando quais estao pendentes e quais ja foram cumpridos hoje
+- **THEN** o sistema lista apenas os habitos configurados para segunda-feira (ou todos os dias) cuja vigencia abranja a data atual, indicando quais estao pendentes e quais ja foram cumpridos hoje
+
+#### Scenario: Ocultacao de metas fora do periodo de vigencia
+- **WHEN** o usuario visualiza o dia atual e existe um habito cuja data de termino era ontem ou cuja data de inicio e futura
+- **THEN** o sistema nao inclui esse habito na lista de metas ativas do dia
+
+### Requirement: Adaptabilidade visual ao teclado no formulario
+O sistema SHALL ajustar a area visivel do formulario de cadastro e edicao de metas quando o teclado virtual estiver ativo, garantindo que os campos de titulo, seletores de data, horarios de lembrete e botoes de acao permaneçam visiveis e alcancaveis por rolagem.
+
+#### Scenario: Abertura do teclado durante a edicao de horario ou alarme
+- **WHEN** o usuario foca em campos de texto com o teclado virtual aberto
+- **THEN** o sistema ajusta a visualizacao com rolagem automatica sem cobrir os campos de horario, switches ou botoes de salvar
