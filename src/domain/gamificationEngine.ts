@@ -1,9 +1,16 @@
 import { AttributeCategory, Difficulty, UserProfile, CheckInRecord, Habit } from '../types';
+import { getClassAttributeMultiplier } from './classProgressionService';
 
 export const BASE_XP: Record<Difficulty, number> = {
   facil: 15,
   medio: 30,
   dificil: 50,
+};
+
+export const EXPEDITION_POINTS_BY_DIFFICULTY: Record<Difficulty, number> = {
+  facil: 5,
+  medio: 10,
+  dificil: 20,
 };
 
 export const STREAK_BONUS_THRESHOLD = 3;
@@ -107,10 +114,16 @@ export function processHabitCompletion(
     xpGained
   );
 
-  // Evolucao do atributo
+  // Evolucao do atributo com aplicacao de afinidade da classe ativa
   const currentAttr = profile.attributes[habit.category] || { points: 0, level: 1 };
-  const updatedPoints = currentAttr.points + xpGained;
+  const attrMultiplier = getClassAttributeMultiplier(profile.currentClass || 'aprendiz', habit.category);
+  const attributePointsGained = Math.round(xpGained * attrMultiplier);
+  const updatedPoints = currentAttr.points + attributePointsGained;
   const updatedAttrLevel = calculateAttributeLevel(updatedPoints);
+
+  // Concessao de pontos de expedicao
+  const expeditionPointsGained = EXPEDITION_POINTS_BY_DIFFICULTY[habit.difficulty] || 10;
+  const newExpeditionPoints = (profile.expeditionPoints || 0) + expeditionPointsGained;
 
   // Calculo de HP e Segunda Chance
   let newHp = profile.hp;
@@ -132,6 +145,10 @@ export function processHabitCompletion(
     currentXP: newXP,
     hp: newHp,
     inSecondChance,
+    currentClass: profile.currentClass || 'aprendiz',
+    unlockedClasses: profile.unlockedClasses || ['aprendiz'],
+    expeditionPoints: newExpeditionPoints,
+    goldBalance: profile.goldBalance || 0,
     attributes: {
       ...profile.attributes,
       [habit.category]: {
@@ -146,8 +163,9 @@ export function processHabitCompletion(
     checkInRecord: {
       xpGained,
       attributeGained: habit.category,
-      attributePointsGained: xpGained,
+      attributePointsGained,
       hpGained,
+      expeditionPointsGained,
     },
     newStreak,
     newBestStreak,
@@ -172,12 +190,17 @@ export function revertHabitCompletion(
   const revertedAttrLevel = calculateAttributeLevel(revertedPoints);
 
   const revertedHp = Math.max(0, profile.hp - record.hpGained);
+  const revertedExpedition = Math.max(
+    0,
+    (profile.expeditionPoints || 0) - (record.expeditionPointsGained || 0)
+  );
 
   const updatedProfile: UserProfile = {
     ...profile,
     level,
     currentXP,
     hp: revertedHp,
+    expeditionPoints: revertedExpedition,
     attributes: {
       ...profile.attributes,
       [record.attributeGained]: {
@@ -236,5 +259,9 @@ export function createInitialProfile(): UserProfile {
       forca: { points: 0, level: 1 },
       disciplina: { points: 0, level: 1 },
     },
+    currentClass: 'aprendiz',
+    unlockedClasses: ['aprendiz'],
+    expeditionPoints: 0,
+    goldBalance: 0,
   };
 }

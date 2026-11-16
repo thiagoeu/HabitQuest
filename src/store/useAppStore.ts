@@ -1,13 +1,15 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Habit, CheckInRecord, UserProfile, Achievement } from '../types';
+import { Habit, CheckInRecord, UserProfile, Achievement, CharacterClassId } from '../types';
 import {
   createInitialProfile,
   processHabitCompletion,
   revertHabitCompletion,
   evaluateMissedHabits,
+  applyXpGain,
 } from '../domain/gamificationEngine';
+import { evolveOrSwitchClass as domainEvolveOrSwitchClass } from '../domain/classProgressionService';
 import { INITIAL_ACHIEVEMENTS, evaluateAchievements } from '../domain/achievementsCatalog';
 import { scheduleHabitReminder, cancelHabitNotifications } from '../services/notificationService';
 
@@ -38,6 +40,13 @@ export interface AppState {
   evaluateDayChange: (todayStr?: string) => { hpLost: number; activatedSecondChance: boolean };
   getHabitsForDate: (dateStr: string) => Habit[];
   isHabitCompletedOnDate: (habitId: string, dateStr: string) => boolean;
+  evolveOrSwitchClass: (classId: CharacterClassId) => { success: boolean; error?: string };
+  updateProfileAfterBattle: (
+    expeditionSpent: number,
+    xpAwarded: number,
+    goldAwarded: number
+  ) => { leveledUp: boolean };
+  ensureProfileDefaults: () => void;
   resetStore: () => void;
 }
 
@@ -322,6 +331,66 @@ export const useAppStore = create<AppState>()(
       isHabitCompletedOnDate: (habitId, dateStr) => {
         const state = get();
         return state.checkIns.some((c) => c.habitId === habitId && c.date === dateStr);
+      },
+
+      evolveOrSwitchClass: (classId) => {
+        const state = get();
+        const result = domainEvolveOrSwitchClass(classId, state.profile);
+        if (result.success) {
+          set({ profile: result.updatedProfile });
+        }
+        return { success: result.success, error: result.error };
+      },
+
+      updateProfileAfterBattle: (expeditionSpent, xpAwarded, goldAwarded) => {
+        const state = get();
+        const currentExpedition = state.profile.expeditionPoints || 0;
+        const newExpedition = Math.max(0, currentExpedition - expeditionSpent);
+        const newGold = (state.profile.goldBalance || 0) + goldAwarded;
+
+        let newLevel = state.profile.level;
+        let newXP = state.profile.currentXP;
+        let leveledUp = false;
+
+        if (xpAwarded > 0) {
+          const xpResult = applyXpGain(newLevel, newXP, xpAwarded);
+          newLevel = xpResult.level;
+          newXP = xpResult.currentXP;
+          leveledUp = xpResult.leveledUp;
+        }
+
+        set({
+          profile: {
+            ...state.profile,
+            level: newLevel,
+            currentXP: newXP,
+            expeditionPoints: newExpedition,
+            goldBalance: newGold,
+          },
+        });
+
+        return { leveledUp };
+      },
+
+      ensureProfileDefaults: () => {
+        const state = get();
+        const p = state.profile;
+        if (
+          !p.currentClass ||
+          !p.unlockedClasses ||
+          p.expeditionPoints === undefined ||
+          p.goldBalance === undefined
+        ) {
+          set({
+            profile: {
+              ...p,
+              currentClass: p.currentClass || 'aprendiz',
+              unlockedClasses: p.unlockedClasses || ['aprendiz'],
+              expeditionPoints: p.expeditionPoints || 0,
+              goldBalance: p.goldBalance || 0,
+            },
+          });
+        }
       },
 
       resetStore: () => {

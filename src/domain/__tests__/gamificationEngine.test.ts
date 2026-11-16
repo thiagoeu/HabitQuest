@@ -10,7 +10,7 @@ import {
   createInitialProfile,
   BASE_XP,
 } from '../gamificationEngine';
-import { Habit, CheckInRecord } from '../../types';
+import { Habit, CheckInRecord, UserProfile } from '../../types';
 
 describe('gamificationEngine', () => {
   const mockHabit: Habit = {
@@ -121,5 +121,34 @@ describe('gamificationEngine', () => {
     expect(reverted.revertedStreak).toBe(0);
     expect(reverted.updatedProfile.currentXP).toBe(0);
     expect(reverted.updatedProfile.attributes.intelecto.points).toBe(0);
+  });
+
+  test('concede pontos de expedicao proporcionais a dificuldade da tarefa', () => {
+    const profile = createInitialProfile();
+
+    const easyHabit: Habit = { ...mockHabit, difficulty: 'facil' };
+    const mediumHabit: Habit = { ...mockHabit, difficulty: 'medio' };
+    const hardHabit: Habit = { ...mockHabit, difficulty: 'dificil' };
+
+    const rEasy = processHabitCompletion(profile, easyHabit);
+    expect(rEasy.updatedProfile.expeditionPoints).toBe(5);
+
+    const rMed = processHabitCompletion(profile, mediumHabit);
+    expect(rMed.updatedProfile.expeditionPoints).toBe(10);
+
+    const rHard = processHabitCompletion(profile, hardHabit);
+    expect(rHard.updatedProfile.expeditionPoints).toBe(20);
+  });
+
+  test('aplica afinidade de classe no ganho de pontos do atributo', () => {
+    const sageProfile: UserProfile = {
+      ...createInitialProfile(),
+      currentClass: 'sabio', // Sabio tem +25% de Intelecto
+    };
+
+    const result = processHabitCompletion(sageProfile, mockHabit); // Intelecto medio = 30 XP base
+    // 30 * 1.25 = 37.5 -> 38 pontos
+    expect(result.updatedProfile.attributes.intelecto.points).toBe(38);
+    expect(result.checkInRecord.attributePointsGained).toBe(38);
   });
 });

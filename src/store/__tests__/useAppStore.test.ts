@@ -190,4 +190,31 @@ describe('useAppStore with date ranges and notificationService', () => {
     expect(useAppStore.getState().profile.hp).toBe(90);
     expect(useAppStore.getState().lastEvaluatedDate).toBe('2026-11-17');
   });
+
+  test('permite evoluir de classe e atualizar perfil com vitorias de batalha', () => {
+    const store = useAppStore.getState();
+
+    // Configura perfil qualificado para Cavaleiro (Level >= 5, Força >= 20)
+    useAppStore.setState({
+      profile: {
+        ...store.profile,
+        level: 5,
+        attributes: {
+          ...store.profile.attributes,
+          forca: { points: 30, level: 1 },
+        },
+      },
+    });
+
+    const evolveResult = store.evolveOrSwitchClass('cavaleiro');
+    expect(evolveResult.success).toBe(true);
+    expect(useAppStore.getState().profile.currentClass).toBe('cavaleiro');
+    expect(useAppStore.getState().profile.unlockedClasses).toContain('cavaleiro');
+
+    // Concede recompensas de batalha
+    store.updateProfileAfterBattle(15, 60, 50);
+    const updated = useAppStore.getState().profile;
+    expect(updated.goldBalance).toBe(50);
+    expect(updated.currentXP).toBe(60);
+  });
 });
