@@ -1,12 +1,19 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useAppStore, getTodayDateString } from '../../store/useAppStore';
+import { useDungeonStore } from '../../store/useDungeonStore';
 import { ATTRIBUTE_POINTS_PER_LEVEL } from '../../domain/gamificationEngine';
+import { getClassDetails } from '../../domain/classProgressionService';
+import { ClassIcon } from '../../components/rpg/ClassIcon';
 
 export default function ProgressScreen() {
   const profile = useAppStore((state) => state.profile);
   const habits = useAppStore((state) => state.habits);
   const checkIns = useAppStore((state) => state.checkIns);
+
+  const battlesWonCount = useDungeonStore((state) => state.getBattlesWonCount());
+  const defeatedCount = useDungeonStore((state) => state.getDefeatedCount());
+  const currentClass = getClassDetails(profile.currentClass);
 
   // Calcula ultimos 7 dias para o mapa visual de superacao
   const today = new Date();
@@ -73,6 +80,36 @@ export default function ProgressScreen() {
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>{profile.bestGlobalStreak}</Text>
             <Text style={styles.statLabel}>Recorde de Dias</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Painel de Expedicoes e Combate RPG */}
+      <View style={styles.sectionCard}>
+        <View style={styles.rpgHeaderRow}>
+          <View>
+            <Text style={styles.sectionTitle}>Conquistas de Combate & Masmorras</Text>
+            <Text style={styles.rpgSubtitle}>
+              Classe Ativa: {currentClass.name} • {currentClass.title}
+            </Text>
+          </View>
+          <ClassIcon classId={profile.currentClass} size={38} />
+        </View>
+
+        <View style={styles.statsGrid}>
+          <View style={styles.statBox}>
+            <Text style={[styles.statNumber, { color: '#0EA5E9' }]}>{defeatedCount}</Text>
+            <Text style={styles.statLabel}>Especies Vencidas</Text>
+          </View>
+
+          <View style={styles.statBox}>
+            <Text style={[styles.statNumber, { color: '#10B981' }]}>{battlesWonCount}</Text>
+            <Text style={styles.statLabel}>Batalhas Ganhas</Text>
+          </View>
+
+          <View style={styles.statBox}>
+            <Text style={[styles.statNumber, { color: '#F59E0B' }]}>{profile.goldBalance || 0}</Text>
+            <Text style={styles.statLabel}>Ouro Acumulado</Text>
           </View>
         </View>
       </View>
@@ -216,6 +253,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#232333',
+  },
+  rpgHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  rpgSubtitle: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    marginTop: 2,
   },
   sectionTitle: {
     color: '#ffffff',

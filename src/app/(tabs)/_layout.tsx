@@ -33,6 +33,18 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="dungeon"
+        options={{
+          title: 'Cavernas',
+          headerTitle: 'Masmorras e Batalhas RPG',
+          tabBarIcon: ({ color }) => (
+            <View style={styles.iconContainer}>
+              <Text style={[styles.tabIconText, { color }]}>[Caverna]</Text>
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="progress"
         options={{
           title: 'Progresso',
