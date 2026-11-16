@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { CharacterClassId } from '../../types';
 import { getClassDetails } from '../../domain/classProgressionService';
+import { CLASS_AVATARS } from '../../constants/assets';
 
 interface ClassIconProps {
   classId: CharacterClassId;
@@ -18,25 +19,7 @@ export const ClassIcon: React.FC<ClassIconProps> = ({
 }) => {
   const classDetails = getClassDetails(classId);
   const themeColor = isLocked ? '#64748B' : classDetails.themeColor;
-
-  const getClassGlyph = (id: CharacterClassId): string => {
-    switch (id) {
-      case 'aprendiz':
-        return 'APR';
-      case 'monge':
-        return 'MNG';
-      case 'cavaleiro':
-        return 'CVL';
-      case 'sabio':
-        return 'SAB';
-      case 'arqueiro':
-        return 'ARQ';
-      case 'exorcista':
-        return 'EXO';
-      default:
-        return 'RPG';
-    }
-  };
+  const imageSource = CLASS_AVATARS[classId];
 
   const getSubTitle = (id: CharacterClassId): string => {
     switch (id) {
@@ -61,29 +44,48 @@ export const ClassIcon: React.FC<ClassIconProps> = ({
     width: size,
     height: size,
     borderRadius: size * 0.28,
-    backgroundColor: isLocked ? '#1E293B' : `${themeColor}22`,
     borderColor: isLocked ? '#334155' : themeColor,
   };
-
-  const fontSize = Math.max(10, Math.round(size * 0.28));
 
   return (
     <View style={styles.wrapper}>
       <View style={[styles.container, boxStyle]}>
-        {/* Anel ornamental interno */}
-        <View
-          style={[
-            styles.innerRing,
-            {
-              borderColor: `${themeColor}55`,
-              borderRadius: size * 0.22,
-            },
-          ]}
-        >
-          <Text style={[styles.glyphText, { color: themeColor, fontSize }]}>
-            {getClassGlyph(classId)}
-          </Text>
-        </View>
+        {imageSource ? (
+          <Image
+            source={imageSource}
+            style={[
+              styles.avatarImage,
+              {
+                width: size - 4,
+                height: size - 4,
+                borderRadius: (size - 4) * 0.26,
+                opacity: isLocked ? 0.35 : 1,
+              },
+            ]}
+            resizeMode="cover"
+          />
+        ) : (
+          <View
+            style={[
+              styles.innerRing,
+              {
+                borderColor: `${themeColor}55`,
+                borderRadius: size * 0.22,
+                backgroundColor: `${themeColor}22`,
+              },
+            ]}
+          >
+            <Text style={[styles.glyphText, { color: themeColor, fontSize: size * 0.28 }]}>
+              {classId.substring(0, 3).toUpperCase()}
+            </Text>
+          </View>
+        )}
+
+        {isLocked && (
+          <View style={styles.lockOverlay}>
+            <Text style={styles.lockIcon}>[X]</Text>
+          </View>
+        )}
       </View>
 
       {showBadge && (
@@ -104,7 +106,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 3,
+    overflow: 'hidden',
+    backgroundColor: '#1E293B',
+  },
+  avatarImage: {
+    backgroundColor: '#0F172A',
   },
   innerRing: {
     width: '100%',
@@ -116,6 +122,21 @@ const styles = StyleSheet.create({
   glyphText: {
     fontWeight: '900',
     letterSpacing: 0.8,
+  },
+  lockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockIcon: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '900',
   },
   badge: {
     marginTop: 4,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet } from 'react-native';
+import { TabBadgeIcon } from '../../components/TabBadgeIcon';
 
 export default function TabsLayout() {
   return (
@@ -12,7 +12,7 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: '#12121a',
           borderTopColor: '#232333',
-          height: 60,
+          height: 62,
           paddingBottom: 8,
           paddingTop: 6,
         },
@@ -25,10 +25,8 @@ export default function TabsLayout() {
         options={{
           title: 'Hoje',
           headerTitle: 'HabitQuest',
-          tabBarIcon: ({ color }) => (
-            <View style={styles.iconContainer}>
-              <Text style={[styles.tabIconText, { color }]}>[Hoje]</Text>
-            </View>
+          tabBarIcon: ({ color, focused }) => (
+            <TabBadgeIcon tab="today" color={color} focused={focused} size={26} />
           ),
         }}
       />
@@ -37,48 +35,31 @@ export default function TabsLayout() {
         options={{
           title: 'Cavernas',
           headerTitle: 'Masmorras e Batalhas RPG',
-          tabBarIcon: ({ color }) => (
-            <View style={styles.iconContainer}>
-              <Text style={[styles.tabIconText, { color }]}>[Caverna]</Text>
-            </View>
+          tabBarIcon: ({ color, focused }) => (
+            <TabBadgeIcon tab="dungeon" color={color} focused={focused} size={26} />
           ),
         }}
       />
       <Tabs.Screen
         name="progress"
         options={{
-          title: 'Progresso',
-          headerTitle: 'Superação e Evolução',
-          tabBarIcon: ({ color }) => (
-            <View style={styles.iconContainer}>
-              <Text style={[styles.tabIconText, { color }]}>[Stats]</Text>
-            </View>
+          title: 'Status',
+          headerTitle: 'Status e Superação',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBadgeIcon tab="progress" color={color} focused={focused} size={26} />
           ),
         }}
       />
       <Tabs.Screen
         name="achievements"
         options={{
-          title: 'Conquistas',
+          title: 'Medalhas',
           headerTitle: 'Galeria de Medalhas',
-          tabBarIcon: ({ color }) => (
-            <View style={styles.iconContainer}>
-              <Text style={[styles.tabIconText, { color }]}>[Medalhas]</Text>
-            </View>
+          tabBarIcon: ({ color, focused }) => (
+            <TabBadgeIcon tab="achievements" color={color} focused={focused} size={26} />
           ),
         }}
       />
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  iconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabIconText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-});

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Modal,
   Alert,
+  Image,
 } from 'react-native';
 import { useAppStore } from '../../store/useAppStore';
 import { useDungeonStore } from '../../store/useDungeonStore';
@@ -20,6 +21,7 @@ import { getClassDetails } from '../../domain/classProgressionService';
 import { Dungeon, Monster, BattleResult } from '../../types';
 import { MonsterIcon } from '../../components/rpg/MonsterIcon';
 import { ClassIcon } from '../../components/rpg/ClassIcon';
+import { RPG_ASSETS } from '../../constants/assets';
 
 export default function DungeonScreen() {
   const profile = useAppStore((state) => state.profile);
@@ -72,6 +74,21 @@ export default function DungeonScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Banner Panoramico da Masmorra */}
+      <View style={styles.bannerContainer}>
+        <Image
+          source={RPG_ASSETS.dungeonBanner}
+          style={styles.bannerImage}
+          resizeMode="cover"
+        />
+        <View style={styles.bannerOverlay}>
+          <Text style={styles.bannerTitle}>EXPEDICOES & MASMORRAS</Text>
+          <Text style={styles.bannerSubtitle}>
+            Transforme sua consistencia diaria em poder de combate
+          </Text>
+        </View>
+      </View>
+
       {/* Cabecalho de Expedicao */}
       <View style={styles.statusCard}>
         <View style={styles.statusRow}>
@@ -340,6 +357,41 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 40,
+  },
+  bannerContainer: {
+    height: 140,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#3B3B54',
+    position: 'relative',
+    backgroundColor: '#1E1E2D',
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bannerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(12, 12, 18, 0.55)',
+    justifyContent: 'flex-end',
+    padding: 14,
+  },
+  bannerTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  bannerSubtitle: {
+    color: '#E2E8F0',
+    fontSize: 11,
+    marginTop: 2,
   },
   statusCard: {
     backgroundColor: '#1E1E2D',

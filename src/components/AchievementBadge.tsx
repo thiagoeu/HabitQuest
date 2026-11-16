@@ -26,9 +26,11 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({ achievement 
     <View style={[styles.card, isUnlocked ? styles.cardUnlocked : styles.cardLocked]}>
       {/* Icone / Emblema da Conquista */}
       <View style={[styles.badgeIconBox, isUnlocked ? styles.badgeIconUnlocked : styles.badgeIconLocked]}>
-        <Text style={[styles.badgeIconText, isUnlocked && styles.badgeIconTextUnlocked]}>
-          {isUnlocked ? '[Trofeu]' : '[Cadeado]'}
-        </Text>
+        <View style={[styles.badgeInnerRing, isUnlocked && styles.badgeInnerRingUnlocked]}>
+          <Text style={[styles.badgeIconText, isUnlocked && styles.badgeIconTextUnlocked]}>
+            {isUnlocked ? 'MED' : 'LOCK'}
+          </Text>
+        </View>
       </View>
 
       {/* Detalhes */}
@@ -76,29 +78,44 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   badgeIconBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    borderWidth: 1.5,
+    padding: 2,
+  },
+  badgeInnerRing: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 10,
     borderWidth: 1,
+    borderColor: '#374151',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeInnerRingUnlocked: {
+    borderColor: '#F59E0B',
+    backgroundColor: '#78350F33',
   },
   badgeIconUnlocked: {
-    backgroundColor: '#312e81',
-    borderColor: '#818cf8',
+    backgroundColor: '#1E1B4B',
+    borderColor: '#F59E0B',
   },
   badgeIconLocked: {
-    backgroundColor: '#262638',
+    backgroundColor: '#161622',
     borderColor: '#374151',
   },
   badgeIconText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#9ca3af',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    color: '#64748B',
   },
   badgeIconTextUnlocked: {
-    color: '#fbbf24',
+    color: '#FCD34D',
   },
   content: {
     flex: 1,

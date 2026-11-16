@@ -112,7 +112,7 @@ export const ClassProgressionModal: React.FC<ClassProgressionModalProps> = ({
               <View style={styles.classHeroHeader}>
                 <ClassIcon
                   classId={selectedClass.id}
-                  size={58}
+                  size={72}
                   isLocked={!isAlreadyUnlocked && !requirementCheck.eligible}
                   showBadge={true}
                 />

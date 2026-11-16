@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { DungeonDifficulty, Monster } from '../../types';
+import { RPG_ASSETS } from '../../constants/assets';
 
 interface MonsterIconProps {
   monster: Monster;
@@ -51,6 +52,9 @@ export const MonsterIcon: React.FC<MonsterIconProps> = ({
     return name.substring(0, 3).toUpperCase();
   };
 
+  const isBoss = monster.id === 'monster-lorde-procrastinador' || monster.difficulty === 'chefe';
+  const bossImage = isBoss ? RPG_ASSETS.bossProcrastination : null;
+
   const diffColor = getDifficultyColor(monster.difficulty);
   const fontSize = Math.max(11, Math.round(size * 0.26));
 
@@ -68,12 +72,24 @@ export const MonsterIcon: React.FC<MonsterIconProps> = ({
           },
         ]}
       >
-        <View style={[styles.innerFrame, { borderColor: `${diffColor}44`, borderRadius: size * 0.24 }]}>
-          <Text style={[styles.initialsText, { color: diffColor, fontSize }]}>
-            {getMonsterInitials(monster.name)}
-          </Text>
-          <Text style={[styles.levelTag, { color: '#E2E8F0' }]}>Nv.{monster.level}</Text>
-        </View>
+        {bossImage ? (
+          <Image
+            source={bossImage}
+            style={{
+              width: size - 4,
+              height: size - 4,
+              borderRadius: (size - 4) * 0.28,
+            }}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[styles.innerFrame, { borderColor: `${diffColor}44`, borderRadius: size * 0.24 }]}>
+            <Text style={[styles.initialsText, { color: diffColor, fontSize }]}>
+              {getMonsterInitials(monster.name)}
+            </Text>
+            <Text style={[styles.levelTag, { color: '#E2E8F0' }]}>Nv.{monster.level}</Text>
+          </View>
+        )}
       </View>
 
       {showDifficultyBadge && (
