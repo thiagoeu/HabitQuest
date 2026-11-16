@@ -17,11 +17,15 @@ O sistema SHALL conceder pontos de experiencia (XP) ao usuario sempre que um hab
 - **THEN** o sistema incrementa o nivel do usuario em 1, mantem o XP excedente para o novo nivel e exibe um feedback de subida de nivel
 
 ### Requirement: Evolucao de atributos por categoria
-O sistema SHALL incrementar os pontos e o nivel do atributo especifico (Intelecto, Forca/Saude ou Disciplina) vinculado a categoria do habito concluido.
+O sistema SHALL incrementar os pontos e o nivel do atributo especifico (Intelecto, Forca/Saude ou Disciplina) vinculado a categoria do habito concluido, aplicando multiplicadores de afinidade caso a classe ativa do usuario possua especializacao no atributo correspondente.
 
 #### Scenario: Evolucao de Intelecto ao concluir meta de estudo
 - **WHEN** o usuario conclui um habito da categoria "Intelecto"
 - **THEN** o sistema incrementa os pontos do atributo "Intelecto" sem alterar os pontos de "Forca/Saude"
+
+#### Scenario: Aplicacao de multiplicador de afinidade por classe
+- **WHEN** o usuario possui uma classe especializada (como Sabio para Intelecto) e conclui uma meta correspondente
+- **THEN** o sistema aplica o multiplicador de ganho de atributo da classe no saldo concedido
 
 ### Requirement: Contagem de ofensivas (Streaks)
 O sistema SHALL contabilizar a sequencia de dias consecutivos em que cada habito programado foi cumprido, bem como a ofensiva global de dias ativos do usuario, registrando tambem o recorde historico de ofensiva.
@@ -51,3 +55,10 @@ O sistema SHALL avaliar marcos de progresso (primeira meta concluida, ofensivas 
 #### Scenario: Desbloqueio de conquista de 7 dias de ofensiva
 - **WHEN** o usuario atinge 7 dias consecutivos de ofensiva
 - **THEN** o sistema marca a conquista de 7 dias como desbloqueada com a data da conquista e notifica o usuario na interface
+
+### Requirement: Concessao de pontos de expedicao ao concluir habitos
+O sistema SHALL conceder pontos de expedicao ao usuario a cada conclusao de habito, com volume determinado pela dificuldade da tarefa (Facil, Medio ou Dificil).
+
+#### Scenario: Credito de pontos de expedicao
+- **WHEN** o usuario marca como concluido um habito no dia
+- **THEN** o sistema credita os pontos de expedicao ao perfil do usuario imediatamente
