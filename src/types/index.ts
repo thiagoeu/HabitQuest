@@ -1,3 +1,6 @@
+import { CharacterClassId } from './rpg';
+export * from './rpg';
+
 export type AttributeCategory = 'intelecto' | 'forca' | 'disciplina';
 
 export type Difficulty = 'facil' | 'medio' | 'dificil';
@@ -29,6 +32,7 @@ export interface CheckInRecord {
   attributeGained: AttributeCategory;
   attributePointsGained: number;
   hpGained: number;
+  expeditionPointsGained?: number;
 }
 
 export interface AttributeProgress {
@@ -45,6 +49,10 @@ export interface UserProfile {
   bestGlobalStreak: number;
   lastActiveDate: string | null; // YYYY-MM-DD
   attributes: Record<AttributeCategory, AttributeProgress>;
+  currentClass: CharacterClassId;
+  unlockedClasses: CharacterClassId[];
+  expeditionPoints: number;
+  goldBalance: number;
 }
 
 export interface Achievement {
