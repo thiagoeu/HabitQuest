@@ -217,4 +217,138 @@ describe('useAppStore with date ranges and notificationService', () => {
     expect(updated.goldBalance).toBe(50);
     expect(updated.currentXP).toBe(60);
   });
+
+  test('concede bonus Quest Perfeita ao fechar 100% de quest semanal e estorna se desfeito no mesmo dia', async () => {
+    const store = useAppStore.getState();
+
+    const habit = await store.addHabit({
+      title: 'Desafio Semanal Leitura',
+      category: 'intelecto',
+      difficulty: 'medio', // 30 XP/dia (+20% streak = 36 XP/dia a partir do 4o check-in)
+      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      startDate: '2026-11-01',
+      endDate: '2026-11-07', // 7 dias -> semanal medio = 225 XP; perfeita = 270 XP
+      reminderEnabled: false,
+    });
+
+    const days = [
+      '2026-11-01',
+      '2026-11-02',
+      '2026-11-03',
+      '2026-11-04',
+      '2026-11-05',
+      '2026-11-06',
+    ];
+    for (const d of days) {
+      const res = store.completeHabit(habit.id, d);
+      expect(res.unlockedQuestRewards).toHaveLength(0);
+    }
+
+    const pointsBeforeFinalDay = useAppStore.getState().profile.attributes.intelecto.points;
+
+    // 7o dia -> libera 270 XP de Quest Perfeita imediatamente
+    const finalResult = store.completeHabit(habit.id, '2026-11-07');
+    expect(finalResult.unlockedQuestRewards).toHaveLength(1);
+    expect(finalResult.unlockedQuestRewards[0]).toMatchObject({
+      kind: 'period_perfect',
+      xpGained: 270,
+      rewardKey: 'period_completion',
+    });
+    expect(useAppStore.getState().questRewards).toHaveLength(1);
+    // 36 do check-in + 270 do bonus = +306 pontos em Intelecto
+    expect(useAppStore.getState().profile.attributes.intelecto.points).toBe(
+      pointsBeforeFinalDay + 36 + 270
+    );
+
+    // Idempotencia: virada de dia nao paga novamente
+    const dayChangeRes = store.evaluateDayChange('2026-11-08');
+    expect(dayChangeRes.unlockedQuestRewards).toHaveLength(0);
+    expect(useAppStore.getState().questRewards).toHaveLength(1);
+
+    // Desmarca o ultimo dia no mesmo dia -> estorna o check-in e o bonus de 270 XP
+    const reverted = store.uncompleteHabit(habit.id, '2026-11-07');
+    expect(reverted).toBe(true);
+    expect(useAppStore.getState().questRewards).toHaveLength(0);
+    expect(useAppStore.getState().profile.attributes.intelecto.points).toBe(pointsBeforeFinalDay);
+  });
+
+  test('concede bonus na virada de dia apenas para quests com pelo menos 80% de aderencia', async () => {
+    const store = useAppStore.getState();
+
+    // Quest A: 10 dias, cumprida em 8 (80%) -> ganha 225 XP ao virar o prazo
+    const habit80 = await store.addHabit({
+      title: 'Quest 80%',
+      category: 'disciplina',
+      difficulty: 'medio',
+      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      startDate: '2026-11-01',
+      endDate: '2026-11-10',
+      reminderEnabled: false,
+    });
+
+    // Quest B: 10 dias, cumprida em 7 (70%) -> nao ganha bonus
+    const habit70 = await store.addHabit({
+      title: 'Quest 70%',
+      category: 'forca',
+      difficulty: 'medio',
+      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      startDate: '2026-11-01',
+      endDate: '2026-11-10',
+      reminderEnabled: false,
+    });
+
+    for (let day = 1; day <= 8; day += 1) {
+      store.completeHabit(habit80.id, `2026-11-${String(day).padStart(2, '0')}`);
+    }
+    for (let day = 1; day <= 7; day += 1) {
+      store.completeHabit(habit70.id, `2026-11-${String(day).padStart(2, '0')}`);
+    }
+
+    expect(useAppStore.getState().questRewards).toHaveLength(0);
+
+    useAppStore.setState({ lastEvaluatedDate: '2026-11-10' });
+    const result = store.evaluateDayChange('2026-11-11');
+
+    expect(result.unlockedQuestRewards).toHaveLength(1);
+    expect(result.unlockedQuestRewards[0]).toMatchObject({
+      habitId: habit80.id,
+      kind: 'period_completion',
+      xpGained: 225,
+    });
+    expect(useAppStore.getState().questRewards).toHaveLength(1);
+  });
+
+  test('concede e estorna marco de 7 check-ins em quest continua ao desfazer no mesmo dia', async () => {
+    const store = useAppStore.getState();
+
+    const continuousHabit = await store.addHabit({
+      title: 'Meditar Todos os Dias',
+      category: 'disciplina',
+      difficulty: 'medio',
+      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      reminderEnabled: false,
+    });
+
+    for (let day = 1; day <= 6; day += 1) {
+      store.completeHabit(continuousHabit.id, `2026-11-0${day}`);
+    }
+    const disciplineBefore7th = useAppStore.getState().profile.attributes.disciplina.points;
+
+    // 7o check-in dispara marco de 7 dias (+225 XP)
+    const seventh = store.completeHabit(continuousHabit.id, '2026-11-07');
+    expect(seventh.unlockedQuestRewards).toHaveLength(1);
+    expect(seventh.unlockedQuestRewards[0]).toMatchObject({
+      kind: 'continuous_milestone',
+      milestoneDays: 7,
+      xpGained: 225,
+    });
+    expect(useAppStore.getState().profile.attributes.disciplina.points).toBe(
+      disciplineBefore7th + 36 + 225
+    );
+
+    // Desmarca o 7o check-in no mesmo dia -> estorna marco de 7 dias
+    store.uncompleteHabit(continuousHabit.id, '2026-11-07');
+    expect(useAppStore.getState().questRewards).toHaveLength(0);
+    expect(useAppStore.getState().profile.attributes.disciplina.points).toBe(disciplineBefore7th);
+  });
 });

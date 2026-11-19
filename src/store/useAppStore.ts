@@ -1,14 +1,31 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Habit, CheckInRecord, UserProfile, Achievement, CharacterClassId } from '../types';
+import {
+  Habit,
+  CheckInRecord,
+  UserProfile,
+  Achievement,
+  CharacterClassId,
+  QuestRewardRecord,
+} from '../types';
 import {
   createInitialProfile,
   processHabitCompletion,
   revertHabitCompletion,
   evaluateMissedHabits,
   applyXpGain,
+  applyQuestReward,
+  revertQuestReward,
 } from '../domain/gamificationEngine';
+import {
+  evaluateEligibleQuestRewards,
+  getEffectiveStartDate,
+  getScheduledDatesInRange,
+  isValidDateString,
+  QUEST_MIN_COMPLETION_RATE,
+  SHORT_QUEST_MAX_SCHEDULED_DAYS,
+} from '../domain/questProgressService';
 import { evolveOrSwitchClass as domainEvolveOrSwitchClass } from '../domain/classProgressionService';
 import { INITIAL_ACHIEVEMENTS, evaluateAchievements } from '../domain/achievementsCatalog';
 import { scheduleHabitReminder, cancelHabitNotifications } from '../services/notificationService';
@@ -20,9 +37,71 @@ export function getTodayDateString(date: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+function applyPendingQuestRewardsForStore(
+  habits: Habit[],
+  checkIns: CheckInRecord[],
+  existingRewards: QuestRewardRecord[],
+  profile: UserProfile,
+  referenceDate: string
+): {
+  updatedProfile: UserProfile;
+  updatedQuestRewards: QuestRewardRecord[];
+  unlockedQuestRewards: QuestRewardRecord[];
+} {
+  const pendingRewards = evaluateEligibleQuestRewards(
+    habits,
+    checkIns,
+    existingRewards,
+    referenceDate
+  );
+
+  if (pendingRewards.length === 0) {
+    return {
+      updatedProfile: profile,
+      updatedQuestRewards: existingRewards,
+      unlockedQuestRewards: [],
+    };
+  }
+
+  let currentProfile = profile;
+  const newlyUnlocked: QuestRewardRecord[] = [];
+  const nowIso = new Date().toISOString();
+
+  for (const pending of pendingRewards) {
+    const { updatedProfile, attributePointsGained } = applyQuestReward(
+      currentProfile,
+      pending.attributeGained,
+      pending.xpGained
+    );
+    currentProfile = updatedProfile;
+
+    newlyUnlocked.push({
+      id: `qreward-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      habitId: pending.habitId,
+      rewardKey: pending.rewardKey,
+      kind: pending.kind,
+      tier: pending.tier,
+      milestoneDays: pending.milestoneDays,
+      xpGained: pending.xpGained,
+      attributeGained: pending.attributeGained,
+      attributePointsGained,
+      completionRate: pending.completionRate,
+      awardedAt: nowIso,
+      triggerDate: pending.triggerDate,
+    });
+  }
+
+  return {
+    updatedProfile: currentProfile,
+    updatedQuestRewards: [...existingRewards, ...newlyUnlocked],
+    unlockedQuestRewards: newlyUnlocked,
+  };
+}
+
 export interface AppState {
   habits: Habit[];
   checkIns: CheckInRecord[];
+  questRewards: QuestRewardRecord[];
   profile: UserProfile;
   achievements: Achievement[];
   lastEvaluatedDate: string | null;
@@ -35,9 +114,14 @@ export interface AppState {
     leveledUp: boolean;
     unlockedAchievements: Achievement[];
     record: CheckInRecord | null;
+    unlockedQuestRewards: QuestRewardRecord[];
   };
   uncompleteHabit: (habitId: string, customDate?: string) => boolean;
-  evaluateDayChange: (todayStr?: string) => { hpLost: number; activatedSecondChance: boolean };
+  evaluateDayChange: (todayStr?: string) => {
+    hpLost: number;
+    activatedSecondChance: boolean;
+    unlockedQuestRewards: QuestRewardRecord[];
+  };
   getHabitsForDate: (dateStr: string) => Habit[];
   isHabitCompletedOnDate: (habitId: string, dateStr: string) => boolean;
   evolveOrSwitchClass: (classId: CharacterClassId) => { success: boolean; error?: string };
@@ -55,6 +139,7 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       habits: [],
       checkIns: [],
+      questRewards: [],
       profile: createInitialProfile(),
       achievements: INITIAL_ACHIEVEMENTS,
       lastEvaluatedDate: null,
@@ -124,18 +209,29 @@ export const useAppStore = create<AppState>()(
       completeHabit: (habitId, customDate) => {
         const state = get();
         const dateStr = customDate || getTodayDateString();
+        const currentQuestRewards = state.questRewards || [];
 
         // Evita duplicatas no mesmo dia
         const existingCheckIn = state.checkIns.find(
           (c) => c.habitId === habitId && c.date === dateStr
         );
         if (existingCheckIn) {
-          return { leveledUp: false, unlockedAchievements: [], record: null };
+          return {
+            leveledUp: false,
+            unlockedAchievements: [],
+            record: null,
+            unlockedQuestRewards: [],
+          };
         }
 
         const habit = state.habits.find((h) => h.id === habitId);
         if (!habit) {
-          return { leveledUp: false, unlockedAchievements: [], record: null };
+          return {
+            leveledUp: false,
+            unlockedAchievements: [],
+            record: null,
+            unlockedQuestRewards: [],
+          };
         }
 
         const wasInSecondChance = state.profile.inSecondChance;
@@ -166,12 +262,30 @@ export const useAppStore = create<AppState>()(
           bestGlobalStreak = Math.max(bestGlobalStreak, globalStreak);
         }
 
-        const finalProfile: UserProfile = {
+        const profileAfterCheckIn: UserProfile = {
           ...updatedProfile,
           globalStreak,
           bestGlobalStreak,
           lastActiveDate: dateStr,
         };
+
+        const updatedHabit: Habit = {
+          ...habit,
+          currentStreak: newStreak,
+          bestStreak: newBestStreak,
+        };
+
+        const {
+          updatedProfile: finalProfile,
+          updatedQuestRewards,
+          unlockedQuestRewards,
+        } = applyPendingQuestRewardsForStore(
+          [updatedHabit],
+          updatedCheckIns,
+          currentQuestRewards,
+          profileAfterCheckIn,
+          dateStr
+        );
 
         // Avalia conquistas desbloqueaveis
         const maxStreak = Math.max(
@@ -190,19 +304,24 @@ export const useAppStore = create<AppState>()(
         set({
           profile: finalProfile,
           checkIns: updatedCheckIns,
+          questRewards: updatedQuestRewards,
           achievements: updatedAchievements,
-          habits: state.habits.map((h) =>
-            h.id === habitId ? { ...h, currentStreak: newStreak, bestStreak: newBestStreak } : h
-          ),
+          habits: state.habits.map((h) => (h.id === habitId ? updatedHabit : h)),
         });
 
         const leveledUp = finalProfile.level > state.profile.level;
-        return { leveledUp, unlockedAchievements: newlyUnlocked, record: newRecord };
+        return {
+          leveledUp,
+          unlockedAchievements: newlyUnlocked,
+          record: newRecord,
+          unlockedQuestRewards,
+        };
       },
 
       uncompleteHabit: (habitId, customDate) => {
         const state = get();
         const dateStr = customDate || getTodayDateString();
+        const currentQuestRewards = state.questRewards || [];
 
         const recordIndex = state.checkIns.findIndex(
           (c) => c.habitId === habitId && c.date === dateStr
@@ -232,15 +351,81 @@ export const useAppStore = create<AppState>()(
           globalStreak -= 1;
         }
 
+        let workingProfile: UserProfile = {
+          ...updatedProfile,
+          globalStreak,
+        };
+
+        // Avalia estorno de bonus de quest disparados no mesmo dia caso o criterio tenha sido perdido
+        const habitCheckInDates = new Set(
+          updatedCheckIns.filter((c) => c.habitId === habitId).map((c) => c.date)
+        );
+        const isBounded = isValidDateString(habit.endDate);
+        let scheduledCount = 0;
+        let completedInPeriod = 0;
+        let minRequiredRate = QUEST_MIN_COMPLETION_RATE;
+
+        if (isBounded && habit.endDate) {
+          const effectiveStart = getEffectiveStartDate(habit, dateStr);
+          const scheduledDates = getScheduledDatesInRange(habit, effectiveStart, habit.endDate);
+          scheduledCount = scheduledDates.length;
+          completedInPeriod = scheduledDates.filter((d) => habitCheckInDates.has(d)).length;
+          minRequiredRate =
+            scheduledCount > 0 && scheduledCount <= SHORT_QUEST_MAX_SCHEDULED_DAYS
+              ? 1.0
+              : QUEST_MIN_COMPLETION_RATE;
+        }
+
+        const remainingQuestRewards: QuestRewardRecord[] = [];
+        for (const reward of currentQuestRewards) {
+          if (reward.habitId !== habitId || reward.triggerDate !== dateStr) {
+            remainingQuestRewards.push(reward);
+            continue;
+          }
+
+          let shouldRevert = false;
+          if (reward.kind === 'continuous_milestone' && reward.milestoneDays) {
+            shouldRevert = habitCheckInDates.size < reward.milestoneDays;
+          } else if (reward.kind === 'period_perfect' && isBounded) {
+            shouldRevert = completedInPeriod < scheduledCount;
+          } else if (reward.kind === 'period_completion' && isBounded && habit.endDate) {
+            if (dateStr <= habit.endDate) {
+              shouldRevert = completedInPeriod < scheduledCount;
+            } else {
+              const rate = scheduledCount > 0 ? completedInPeriod / scheduledCount : 0;
+              shouldRevert = scheduledCount === 0 || rate < minRequiredRate;
+            }
+          }
+
+          if (shouldRevert) {
+            workingProfile = revertQuestReward(workingProfile, reward);
+          } else {
+            remainingQuestRewards.push(reward);
+          }
+        }
+
+        const updatedHabit: Habit = {
+          ...habit,
+          currentStreak: revertedStreak,
+        };
+
+        // Caso tenha estornado period_perfect apos a data final mantendo >= 80%, recalcula bonus padrao
+        const {
+          updatedProfile: finalProfile,
+          updatedQuestRewards: finalQuestRewards,
+        } = applyPendingQuestRewardsForStore(
+          [updatedHabit],
+          updatedCheckIns,
+          remainingQuestRewards,
+          workingProfile,
+          dateStr
+        );
+
         set({
-          profile: {
-            ...updatedProfile,
-            globalStreak,
-          },
+          profile: finalProfile,
           checkIns: updatedCheckIns,
-          habits: state.habits.map((h) =>
-            h.id === habitId ? { ...h, currentStreak: revertedStreak } : h
-          ),
+          questRewards: finalQuestRewards,
+          habits: state.habits.map((h) => (h.id === habitId ? updatedHabit : h)),
         });
 
         return true;
@@ -249,14 +434,72 @@ export const useAppStore = create<AppState>()(
       evaluateDayChange: (todayStr) => {
         const state = get();
         const today = todayStr || getTodayDateString();
+        const currentQuestRewards = state.questRewards || [];
 
         if (!state.lastEvaluatedDate) {
-          set({ lastEvaluatedDate: today });
-          return { hpLost: 0, activatedSecondChance: false };
+          const {
+            updatedProfile,
+            updatedQuestRewards,
+            unlockedQuestRewards,
+          } = applyPendingQuestRewardsForStore(
+            state.habits,
+            state.checkIns,
+            currentQuestRewards,
+            state.profile,
+            today
+          );
+
+          let updatedAchievements = state.achievements;
+          if (unlockedQuestRewards.length > 0) {
+            const maxStreak = Math.max(0, ...state.habits.map((h) => h.bestStreak));
+            updatedAchievements = evaluateAchievements(
+              state.achievements,
+              updatedProfile,
+              state.checkIns.length,
+              maxStreak,
+              false
+            ).updatedAchievements;
+          }
+
+          set({
+            profile: updatedProfile,
+            questRewards: updatedQuestRewards,
+            achievements: updatedAchievements,
+            lastEvaluatedDate: today,
+          });
+          return { hpLost: 0, activatedSecondChance: false, unlockedQuestRewards };
         }
 
         if (state.lastEvaluatedDate === today) {
-          return { hpLost: 0, activatedSecondChance: false };
+          const {
+            updatedProfile,
+            updatedQuestRewards,
+            unlockedQuestRewards,
+          } = applyPendingQuestRewardsForStore(
+            state.habits,
+            state.checkIns,
+            currentQuestRewards,
+            state.profile,
+            today
+          );
+
+          if (unlockedQuestRewards.length > 0) {
+            const maxStreak = Math.max(0, ...state.habits.map((h) => h.bestStreak));
+            const { updatedAchievements } = evaluateAchievements(
+              state.achievements,
+              updatedProfile,
+              state.checkIns.length,
+              maxStreak,
+              false
+            );
+            set({
+              profile: updatedProfile,
+              questRewards: updatedQuestRewards,
+              achievements: updatedAchievements,
+            });
+          }
+
+          return { hpLost: 0, activatedSecondChance: false, unlockedQuestRewards };
         }
 
         // Calcula dia anterior avaliado
@@ -270,7 +513,7 @@ export const useAppStore = create<AppState>()(
           if (h.archived) return false;
           if (h.startDate && h.startDate > prevDate) return false;
           if (h.endDate && h.endDate < prevDate) return false;
-          return h.daysOfWeek.includes(prevDayOfWeek);
+          return h.daysOfWeek.length === 0 || h.daysOfWeek.includes(prevDayOfWeek);
         });
 
         const completedYesterdayHabitIds = new Set(
@@ -298,16 +541,44 @@ export const useAppStore = create<AppState>()(
           finalGlobalStreak = 0;
         }
 
+        const profileAfterMissed: UserProfile = {
+          ...updatedProfile,
+          globalStreak: finalGlobalStreak,
+        };
+
+        const {
+          updatedProfile: finalProfile,
+          updatedQuestRewards,
+          unlockedQuestRewards,
+        } = applyPendingQuestRewardsForStore(
+          updatedHabits,
+          state.checkIns,
+          currentQuestRewards,
+          profileAfterMissed,
+          today
+        );
+
+        let updatedAchievements = state.achievements;
+        if (unlockedQuestRewards.length > 0) {
+          const maxStreak = Math.max(0, ...updatedHabits.map((h) => h.bestStreak));
+          updatedAchievements = evaluateAchievements(
+            state.achievements,
+            finalProfile,
+            state.checkIns.length,
+            maxStreak,
+            false
+          ).updatedAchievements;
+        }
+
         set({
-          profile: {
-            ...updatedProfile,
-            globalStreak: finalGlobalStreak,
-          },
+          profile: finalProfile,
+          questRewards: updatedQuestRewards,
+          achievements: updatedAchievements,
           habits: updatedHabits,
           lastEvaluatedDate: today,
         });
 
-        return { hpLost, activatedSecondChance };
+        return { hpLost, activatedSecondChance, unlockedQuestRewards };
       },
 
       getHabitsForDate: (dateStr) => {
@@ -375,20 +646,25 @@ export const useAppStore = create<AppState>()(
       ensureProfileDefaults: () => {
         const state = get();
         const p = state.profile;
-        if (
+        const needsProfileDefaults =
           !p.currentClass ||
           !p.unlockedClasses ||
           p.expeditionPoints === undefined ||
-          p.goldBalance === undefined
-        ) {
+          p.goldBalance === undefined;
+        const needsQuestRewards = !Array.isArray(state.questRewards);
+
+        if (needsProfileDefaults || needsQuestRewards) {
           set({
-            profile: {
-              ...p,
-              currentClass: p.currentClass || 'aprendiz',
-              unlockedClasses: p.unlockedClasses || ['aprendiz'],
-              expeditionPoints: p.expeditionPoints || 0,
-              goldBalance: p.goldBalance || 0,
-            },
+            profile: needsProfileDefaults
+              ? {
+                  ...p,
+                  currentClass: p.currentClass || 'aprendiz',
+                  unlockedClasses: p.unlockedClasses || ['aprendiz'],
+                  expeditionPoints: p.expeditionPoints || 0,
+                  goldBalance: p.goldBalance || 0,
+                }
+              : p,
+            questRewards: needsQuestRewards ? [] : state.questRewards,
           });
         }
       },
@@ -397,6 +673,7 @@ export const useAppStore = create<AppState>()(
         set({
           habits: [],
           checkIns: [],
+          questRewards: [],
           profile: createInitialProfile(),
           achievements: INITIAL_ACHIEVEMENTS,
           lastEvaluatedDate: null,
@@ -409,6 +686,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         habits: state.habits,
         checkIns: state.checkIns,
+        questRewards: state.questRewards,
         profile: state.profile,
         achievements: state.achievements,
         lastEvaluatedDate: state.lastEvaluatedDate,
