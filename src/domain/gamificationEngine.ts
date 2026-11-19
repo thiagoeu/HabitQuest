@@ -1,4 +1,4 @@
-import { AttributeCategory, Difficulty, UserProfile, CheckInRecord, Habit } from '../types';
+import { AttributeCategory, Difficulty, UserProfile, CheckInRecord, Habit, QuestRewardRecord } from '../types';
 import { getClassAttributeMultiplier } from './classProgressionService';
 
 export const BASE_XP: Record<Difficulty, number> = {
@@ -215,6 +215,85 @@ export function revertHabitCompletion(
   return {
     updatedProfile,
     revertedStreak,
+  };
+}
+
+/**
+ * Aplica recompensa de bonus de duracao ou marco de quest ao perfil global e ao atributo correspondente
+ */
+export function applyQuestReward(
+  profile: UserProfile,
+  category: AttributeCategory,
+  xpGained: number
+): {
+  updatedProfile: UserProfile;
+  attributePointsGained: number;
+  leveledUp: boolean;
+} {
+  if (xpGained <= 0) {
+    return {
+      updatedProfile: profile,
+      attributePointsGained: 0,
+      leveledUp: false,
+    };
+  }
+
+  const { level: newLevel, currentXP: newXP, leveledUp } = applyXpGain(
+    profile.level,
+    profile.currentXP,
+    xpGained
+  );
+
+  const currentAttr = profile.attributes[category] || { points: 0, level: 1 };
+  const attrMultiplier = getClassAttributeMultiplier(profile.currentClass || 'aprendiz', category);
+  const attributePointsGained = Math.round(xpGained * attrMultiplier);
+  const updatedPoints = currentAttr.points + attributePointsGained;
+  const updatedAttrLevel = calculateAttributeLevel(updatedPoints);
+
+  const updatedProfile: UserProfile = {
+    ...profile,
+    level: newLevel,
+    currentXP: newXP,
+    attributes: {
+      ...profile.attributes,
+      [category]: {
+        points: updatedPoints,
+        level: updatedAttrLevel,
+      },
+    },
+  };
+
+  return {
+    updatedProfile,
+    attributePointsGained,
+    leveledUp,
+  };
+}
+
+/**
+ * Estorna uma recompensa de quest previamente aplicada (XP global e pontos do atributo)
+ */
+export function revertQuestReward(
+  profile: UserProfile,
+  reward: Pick<QuestRewardRecord, 'xpGained' | 'attributeGained' | 'attributePointsGained'>
+): UserProfile {
+  const { level, currentXP } = revertXpGain(profile.level, profile.currentXP, reward.xpGained);
+
+  const currentAttr = profile.attributes[reward.attributeGained] || { points: 0, level: 1 };
+  const revertedPoints = Math.max(0, currentAttr.points - reward.attributePointsGained);
+  const revertedAttrLevel = calculateAttributeLevel(revertedPoints);
+
+  return {
+    ...profile,
+    level,
+    currentXP,
+    attributes: {
+      ...profile.attributes,
+      [reward.attributeGained]: {
+        points: revertedPoints,
+        level: revertedAttrLevel,
+      },
+    },
   };
 }
 

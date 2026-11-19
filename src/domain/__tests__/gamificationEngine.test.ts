@@ -6,6 +6,8 @@ import {
   calculateAttributeLevel,
   processHabitCompletion,
   revertHabitCompletion,
+  applyQuestReward,
+  revertQuestReward,
   evaluateMissedHabits,
   createInitialProfile,
   BASE_XP,
@@ -150,5 +152,31 @@ describe('gamificationEngine', () => {
     // 30 * 1.25 = 37.5 -> 38 pontos
     expect(result.updatedProfile.attributes.intelecto.points).toBe(38);
     expect(result.checkInRecord.attributePointsGained).toBe(38);
+  });
+
+  test('aplica e estorna recompensa de bonus de quest com multi-level up e afinidade de classe', () => {
+    const sageProfile: UserProfile = {
+      ...createInitialProfile(),
+      currentClass: 'sabio', // +25% em Intelecto
+    };
+
+    // Nivel 1 (100 XP) + Nivel 2 (200 XP) = 300 XP -> sobe para nivel 3 com 20 XP sobrando
+    const applied = applyQuestReward(sageProfile, 'intelecto', 320);
+    expect(applied.leveledUp).toBe(true);
+    expect(applied.updatedProfile.level).toBe(3);
+    expect(applied.updatedProfile.currentXP).toBe(20);
+    expect(applied.attributePointsGained).toBe(400); // 320 * 1.25
+    expect(applied.updatedProfile.attributes.intelecto.points).toBe(400);
+    expect(applied.updatedProfile.attributes.intelecto.level).toBe(3);
+
+    const reverted = revertQuestReward(applied.updatedProfile, {
+      xpGained: 320,
+      attributeGained: 'intelecto',
+      attributePointsGained: applied.attributePointsGained,
+    });
+    expect(reverted.level).toBe(1);
+    expect(reverted.currentXP).toBe(0);
+    expect(reverted.attributes.intelecto.points).toBe(0);
+    expect(reverted.attributes.intelecto.level).toBe(1);
   });
 });

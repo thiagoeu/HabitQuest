@@ -65,3 +65,38 @@ export interface Achievement {
   iconName: string;
   requirementText: string;
 }
+
+export type QuestDurationTier =
+  | 'pontual'
+  | 'semanal'
+  | 'quinzenal'
+  | 'mensal'
+  | 'trimestral'
+  | 'continua';
+
+export type QuestRewardKind =
+  | 'period_completion'
+  | 'period_perfect'
+  | 'continuous_milestone';
+
+export type QuestLifecycleStatus =
+  | 'ativa'
+  | 'continua'
+  | 'futura'
+  | 'concluida'
+  | 'encerrada';
+
+export interface QuestRewardRecord {
+  id: string;
+  habitId: string;
+  rewardKey: string; // 'period_completion' ou 'milestone:<dias>'
+  kind: QuestRewardKind;
+  tier: QuestDurationTier;
+  milestoneDays?: number;
+  xpGained: number;
+  attributeGained: AttributeCategory;
+  attributePointsGained: number;
+  completionRate: number;
+  awardedAt: string; // ISO 8601
+  triggerDate: string; // YYYY-MM-DD
+}
