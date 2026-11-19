@@ -232,6 +232,54 @@ export function getDurationTier(daysCount: number): DurationTierConfig {
   return found || DURATION_TIER_CONFIGS[DURATION_TIER_CONFIGS.length - 1];
 }
 
+export interface DeriveDifficultyParams {
+  startDate?: string | null;
+  endDate?: string | null;
+  daysOfWeek: number[];
+}
+
+/**
+ * Deriva a dificuldade ('facil' | 'medio' | 'dificil') automaticamente a partir
+ * do periodo de vigencia e da quantidade de dias programados para cumprimento.
+ * Metas curtas/menores recebem menor dificuldade e menos XP;
+ * metas maiores/mais longas recebem maior dificuldade e mais XP.
+ */
+export function deriveHabitDifficulty(params: DeriveDifficultyParams): Difficulty {
+  const { startDate, endDate, daysOfWeek } = params;
+  const safeDaysOfWeek = Array.isArray(daysOfWeek) ? daysOfWeek : [];
+
+  const hasBoundedRange =
+    isValidDateString(startDate) &&
+    isValidDateString(endDate) &&
+    startDate <= endDate;
+
+  if (hasBoundedRange) {
+    const calendarDays = getInclusiveCalendarDays(startDate, endDate);
+    const scheduledDates = getScheduledDatesInRange({ daysOfWeek: safeDaysOfWeek }, startDate, endDate);
+    const scheduledCount = scheduledDates.length;
+
+    // Metas pontuais/curtas (1 a 6 dias corridos OU ate 4 dias de meta programada)
+    if (calendarDays <= 6 || scheduledCount <= 4) {
+      return 'facil';
+    }
+
+    // Metas medias (7 a 27 dias corridos OU ate 19 dias programados)
+    if (calendarDays <= 27 || scheduledCount <= 19) {
+      return 'medio';
+    }
+
+    // Metas mensais, trimestrais e de longo prazo (28+ dias e 20+ programados)
+    return 'dificil';
+  }
+
+  // Modo continuo (sem data final delimitada):
+  // 1 ou 2 dias por semana -> 'medio'; 3 ou mais dias por semana -> 'dificil'
+  if (safeDaysOfWeek.length <= 2) {
+    return 'medio';
+  }
+  return 'dificil';
+}
+
 /**
  * Calcula os valores de bonus fixo e Quest Perfeita para uma duracao e dificuldade
  */

@@ -19,12 +19,14 @@ import { BASE_XP } from '../domain/gamificationEngine';
 import {
   calculateDurationFixedXp,
   calculateMilestoneXp,
+  deriveHabitDifficulty,
   getInclusiveCalendarDays,
   getScheduledDatesInRange,
   isValidDateString,
   QUEST_MIN_COMPLETION_RATE,
   SHORT_QUEST_MAX_SCHEDULED_DAYS,
 } from '../domain/questProgressService';
+import { MiniCalendarPicker } from '../components/MiniCalendarPicker';
 
 const DAYS_OF_WEEK = [
   { day: 0, label: 'Dom' },
@@ -51,34 +53,33 @@ export default function HabitFormScreen() {
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<AttributeCategory>('intelecto');
-  const [difficulty, setDifficulty] = useState<Difficulty>('medio');
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]);
 
-  // Periodo no calendario
-  const [hasDateRange, setHasDateRange] = useState(false);
+  // Periodo no calendario (sempre aberto)
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState('');
 
-  // Horario e avisos de despertador
+  // Horario e avisos de despertador (sempre visiveis)
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderTime, setReminderTime] = useState('08:00');
   const [earlyReminderEnabled, setEarlyReminderEnabled] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Dificuldade calculada dinamicamente com base nas datas e frequencia de dias
+  const calculatedDifficulty: Difficulty = deriveHabitDifficulty({
+    startDate: startDate.trim() ? startDate.trim() : today,
+    endDate: endDate.trim() ? endDate.trim() : null,
+    daysOfWeek: selectedDays,
+  });
+
   useEffect(() => {
     if (existingHabit) {
       setTitle(existingHabit.title);
       setCategory(existingHabit.category);
-      setDifficulty(existingHabit.difficulty);
       setSelectedDays(existingHabit.daysOfWeek);
-
-      if (existingHabit.startDate || existingHabit.endDate) {
-        setHasDateRange(true);
-        setStartDate(existingHabit.startDate || today);
-        setEndDate(existingHabit.endDate || '');
-      }
-
+      setStartDate(existingHabit.startDate || today);
+      setEndDate(existingHabit.endDate || '');
       setReminderEnabled(existingHabit.reminderEnabled);
       setReminderTime(existingHabit.reminderTime || '08:00');
       setEarlyReminderEnabled(!!existingHabit.earlyReminderEnabled);
@@ -115,15 +116,14 @@ export default function HabitFormScreen() {
     const end = new Date();
     end.setDate(start.getDate() + Math.max(0, daysCount - 1));
 
-    setHasDateRange(true);
     setStartDate(getTodayDateString(start));
     setEndDate(getTodayDateString(end));
+    if (errorMessage) setErrorMessage(null);
   };
 
   const renderXpPreviewCard = () => {
-    const dailyXp = BASE_XP[difficulty];
+    const dailyXp = BASE_XP[calculatedDifficulty];
     const hasCompleteBoundedRange =
-      hasDateRange &&
       isValidDateString(startDate) &&
       isValidDateString(endDate) &&
       startDate <= endDate;
@@ -136,7 +136,7 @@ export default function HabitFormScreen() {
         endDate
       );
       const scheduledCount = scheduledDates.length;
-      const xpCalc = calculateDurationFixedXp(calendarDays, difficulty, scheduledCount);
+      const xpCalc = calculateDurationFixedXp(calendarDays, calculatedDifficulty, scheduledCount);
       const minPercent =
         scheduledCount <= SHORT_QUEST_MAX_SCHEDULED_DAYS
           ? 100
@@ -181,9 +181,9 @@ export default function HabitFormScreen() {
           Modo Contínuo: bônus acumulados por marcos de consistência:
         </Text>
         <Text style={styles.previewHighlight}>
-          7 dias (+{calculateMilestoneXp(7, difficulty)} XP) • 30 dias (+
-          {calculateMilestoneXp(30, difficulty)} XP) • 90 dias (+
-          {calculateMilestoneXp(90, difficulty)} XP)
+          7 dias (+{calculateMilestoneXp(7, calculatedDifficulty)} XP) • 30 dias (+
+          {calculateMilestoneXp(30, calculatedDifficulty)} XP) • 90 dias (+
+          {calculateMilestoneXp(90, calculatedDifficulty)} XP)
         </Text>
       </View>
     );
@@ -195,7 +195,7 @@ export default function HabitFormScreen() {
       return;
     }
 
-    if (hasDateRange && startDate && endDate && startDate > endDate) {
+    if (startDate && endDate && startDate > endDate) {
       setErrorMessage('A data inicial não pode ser posterior à data final.');
       return;
     }
@@ -205,10 +205,10 @@ export default function HabitFormScreen() {
     const payload = {
       title: title.trim(),
       category,
-      difficulty,
+      difficulty: calculatedDifficulty,
       daysOfWeek: selectedDays,
-      startDate: hasDateRange && startDate.trim() ? startDate.trim() : null,
-      endDate: hasDateRange && endDate.trim() ? endDate.trim() : null,
+      startDate: startDate.trim() ? startDate.trim() : today,
+      endDate: endDate.trim() ? endDate.trim() : null,
       reminderEnabled,
       reminderTime: reminderEnabled && reminderTime.trim() ? reminderTime.trim() : null,
       earlyReminderEnabled: reminderEnabled ? earlyReminderEnabled : false,
@@ -295,83 +295,127 @@ export default function HabitFormScreen() {
           </View>
         </View>
 
-        {/* Dificuldade */}
+        {/* Dificuldade Automatica (Calculada pelo sistema) */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Dificuldade (Recompensa de XP)</Text>
-          <View style={styles.optionsRow}>
-            {(['facil', 'medio', 'dificil'] as Difficulty[]).map((dif) => (
-              <TouchableOpacity
-                key={dif}
-                style={[styles.optionCard, difficulty === dif && styles.optionCardSelected]}
-                onPress={() => setDifficulty(dif)}
+          <Text style={styles.fieldLabel}>Dificuldade Automática (Recompensa de XP)</Text>
+          <View
+            style={[
+              styles.calculatedCard,
+              calculatedDifficulty === 'facil'
+                ? styles.calculatedCardFacil
+                : calculatedDifficulty === 'medio'
+                ? styles.calculatedCardMedio
+                : styles.calculatedCardDificil,
+            ]}
+          >
+            <View style={styles.calculatedHeaderRow}>
+              <View
+                style={[
+                  styles.difficultyBadge,
+                  calculatedDifficulty === 'facil'
+                    ? styles.difficultyBadgeFacil
+                    : calculatedDifficulty === 'medio'
+                    ? styles.difficultyBadgeMedio
+                    : styles.difficultyBadgeDificil,
+                ]}
               >
-                <Text
-                  style={[styles.optionText, difficulty === dif && styles.optionTextSelected]}
-                >
-                  {dif === 'facil' ? 'Fácil (15 XP)' : dif === 'medio' ? 'Médio (30 XP)' : 'Difícil (50 XP)'}
+                <Text style={styles.difficultyBadgeText}>
+                  {calculatedDifficulty === 'facil'
+                    ? 'FÁCIL (+15 XP/dia)'
+                    : calculatedDifficulty === 'medio'
+                    ? 'MÉDIO (+30 XP/dia)'
+                    : 'DIFÍCIL (+50 XP/dia)'}
                 </Text>
-              </TouchableOpacity>
-            ))}
+              </View>
+              <Text style={styles.calculatedNote}>Calculada pela vigência e dias</Text>
+            </View>
+            <Text style={styles.calculatedDesc}>
+              {calculatedDifficulty === 'facil'
+                ? 'Meta curta (até 6 dias corridos ou poucos check-ins): recompensa inicial para hábitos pontuais.'
+                : calculatedDifficulty === 'medio'
+                ? 'Meta intermediária (1 a 4 semanas): recompensa equilibrada por consistência.'
+                : 'Meta longa (28+ dias ou contínua regular): maior recompensa de XP para jornadas épicas.'}
+            </Text>
           </View>
         </View>
 
-        {/* Periodo de Calendario (de tal a tal dia) */}
+        {/* Periodo de Vigencia no Calendario (Sempre Aberto) */}
         <View style={styles.fieldGroup}>
-          <View style={styles.switchRow}>
-            <View>
-              <Text style={styles.fieldLabel}>Período de Vigência no Calendário</Text>
-              <Text style={styles.fieldSubLabel}>Definir meta com datas de início e fim</Text>
-            </View>
-            <Switch
-              value={hasDateRange}
-              onValueChange={setHasDateRange}
-              trackColor={{ false: '#262638', true: '#6366f1' }}
-              thumbColor="#ffffff"
-            />
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.fieldLabel}>Período de Vigência no Calendário</Text>
+            <Text style={styles.fieldSubLabel}>
+              Selecione o início e o término no mini calendário
+            </Text>
           </View>
 
-          {hasDateRange && (
-            <View style={styles.calendarContainer}>
-              <View style={styles.quickRangeRow}>
-                <Text style={styles.quickRangeLabel}>Atalhos:</Text>
-                {[7, 14, 30, 90].map((days) => (
-                  <TouchableOpacity
-                    key={days}
-                    style={styles.quickRangeButton}
-                    onPress={() => handleApplyQuickRange(days)}
-                  >
-                    <Text style={styles.quickRangeText}>{days} dias</Text>
-                  </TouchableOpacity>
-                ))}
+          <View style={styles.calendarContainer}>
+            {/* Atalhos rapidos de periodo */}
+            <View style={styles.quickRangeRow}>
+              <Text style={styles.quickRangeLabel}>Atalhos:</Text>
+              {[
+                { days: 7, label: '7 dias' },
+                { days: 14, label: '14 dias' },
+                { days: 30, label: '30 dias' },
+                { days: 90, label: '90 dias' },
+              ].map(({ days, label }) => (
+                <TouchableOpacity
+                  key={days}
+                  style={styles.quickRangeButton}
+                  onPress={() => handleApplyQuickRange(days)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.quickRangeText}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={[styles.quickRangeButton, !endDate && styles.quickRangeButtonActive]}
+                onPress={() => setEndDate('')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.quickRangeText, !endDate && styles.quickRangeTextActive]}>
+                  Contínua
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Mini Calendario Interativo */}
+            <MiniCalendarPicker
+              startDate={startDate}
+              endDate={endDate ? endDate : null}
+              onSelectRange={({ startDate: newStart, endDate: newEnd }) => {
+                setStartDate(newStart);
+                setEndDate(newEnd || '');
+                if (errorMessage) setErrorMessage(null);
+              }}
+            />
+
+            {/* Campos de texto para conferencia ou ajuste manual */}
+            <View style={styles.dateInputsRow}>
+              <View style={styles.dateInputCol}>
+                <Text style={styles.dateInputLabel}>Data de Início:</Text>
+                <TextInput
+                  style={styles.dateTextInput}
+                  value={startDate}
+                  onChangeText={setStartDate}
+                  placeholder="AAAA-MM-DD"
+                  placeholderTextColor="#6b7280"
+                  maxLength={10}
+                />
               </View>
 
-              <View style={styles.dateInputsRow}>
-                <View style={styles.dateInputCol}>
-                  <Text style={styles.dateInputLabel}>Data de Início:</Text>
-                  <TextInput
-                    style={styles.dateTextInput}
-                    value={startDate}
-                    onChangeText={setStartDate}
-                    placeholder="AAAA-MM-DD"
-                    placeholderTextColor="#6b7280"
-                    maxLength={10}
-                  />
-                </View>
-
-                <View style={styles.dateInputCol}>
-                  <Text style={styles.dateInputLabel}>Data de Término (opcional):</Text>
-                  <TextInput
-                    style={styles.dateTextInput}
-                    value={endDate}
-                    onChangeText={setEndDate}
-                    placeholder="AAAA-MM-DD"
-                    placeholderTextColor="#6b7280"
-                    maxLength={10}
-                  />
-                </View>
+              <View style={styles.dateInputCol}>
+                <Text style={styles.dateInputLabel}>Data de Término (opcional):</Text>
+                <TextInput
+                  style={styles.dateTextInput}
+                  value={endDate}
+                  onChangeText={setEndDate}
+                  placeholder="AAAA-MM-DD (ou vazio)"
+                  placeholderTextColor="#6b7280"
+                  maxLength={10}
+                />
               </View>
             </View>
-          )}
+          </View>
         </View>
 
         {/* Dias da Semana Programados */}
@@ -395,12 +439,16 @@ export default function HabitFormScreen() {
           </View>
         </View>
 
-        {/* Despertador / Horario e Aviso Previo */}
+        {/* Despertador / Horario e Aviso Previo (Sempre Visivel) */}
         <View style={styles.fieldGroup}>
           <View style={styles.switchRow}>
             <View>
               <Text style={styles.fieldLabel}>Despertador / Horário (Opcional)</Text>
-              <Text style={styles.fieldSubLabel}>Dispara alarme motivacional no horário</Text>
+              <Text style={styles.fieldSubLabel}>
+                {reminderEnabled
+                  ? 'Alarme motivacional ATIVADO'
+                  : 'Alarme motivacional DESATIVADO (toque para ativar)'}
+              </Text>
             </View>
             <Switch
               value={reminderEnabled}
@@ -410,37 +458,48 @@ export default function HabitFormScreen() {
             />
           </View>
 
-          {reminderEnabled && (
-            <View style={styles.reminderDetailsBox}>
-              <View style={styles.timeRow}>
+          {/* Configuracoes sempre visiveis na tela */}
+          <View style={[styles.reminderDetailsBox, !reminderEnabled && styles.reminderBoxMuted]}>
+            <View style={styles.timeRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
                 <Text style={styles.timeLabel}>Horário do Alarme (HH:mm):</Text>
-                <TextInput
-                  style={styles.timeInput}
-                  value={reminderTime}
-                  onChangeText={setReminderTime}
-                  placeholder="08:00"
-                  placeholderTextColor="#6b7280"
-                  maxLength={5}
-                />
+                <Text style={styles.timeSubLabel}>
+                  {reminderEnabled
+                    ? 'Horário do toque motivacional'
+                    : 'Horário pré-configurado (ative o switch para receber o alarme)'}
+                </Text>
               </View>
-
-              {/* Opcao de Aviso 10 Minutos Antes */}
-              <View style={[styles.switchRow, { marginTop: 12 }]}>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={styles.fieldLabel}>Aviso Diário 10 Min Antes</Text>
-                  <Text style={styles.fieldSubLabel}>
-                    Notificação preparatória 10 min antes do alarme principal
-                  </Text>
-                </View>
-                <Switch
-                  value={earlyReminderEnabled}
-                  onValueChange={setEarlyReminderEnabled}
-                  trackColor={{ false: '#262638', true: '#6366f1' }}
-                  thumbColor="#ffffff"
-                />
-              </View>
+              <TextInput
+                style={styles.timeInput}
+                value={reminderTime}
+                onChangeText={setReminderTime}
+                placeholder="08:00"
+                placeholderTextColor="#6b7280"
+                maxLength={5}
+              />
             </View>
-          )}
+
+            {/* Opcao de Aviso 10 Minutos Antes */}
+            <View style={[styles.switchRow, { marginTop: 12 }]}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.fieldLabel}>Aviso Diário 10 Min Antes</Text>
+                <Text style={styles.fieldSubLabel}>
+                  Notificação preparatória 10 min antes do alarme principal
+                </Text>
+              </View>
+              <Switch
+                value={earlyReminderEnabled}
+                onValueChange={(val) => {
+                  if (val && !reminderEnabled) {
+                    setReminderEnabled(true);
+                  }
+                  setEarlyReminderEnabled(val);
+                }}
+                trackColor={{ false: '#262638', true: '#6366f1' }}
+                thumbColor="#ffffff"
+              />
+            </View>
+          </View>
         </View>
 
         {/* Pre-visualizacao dinamica de XP por duracao */}
@@ -524,6 +583,64 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
+  calculatedCard: {
+    backgroundColor: '#161622',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+  },
+  calculatedCardFacil: {
+    borderColor: '#34d39966',
+  },
+  calculatedCardMedio: {
+    borderColor: '#fbbf2466',
+  },
+  calculatedCardDificil: {
+    borderColor: '#f8717166',
+  },
+  calculatedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  difficultyBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  difficultyBadgeFacil: {
+    backgroundColor: '#34d39922',
+    borderWidth: 1,
+    borderColor: '#34d399',
+  },
+  difficultyBadgeMedio: {
+    backgroundColor: '#fbbf2422',
+    borderWidth: 1,
+    borderColor: '#fbbf24',
+  },
+  difficultyBadgeDificil: {
+    backgroundColor: '#f8717122',
+    borderWidth: 1,
+    borderColor: '#f87171',
+  },
+  difficultyBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  calculatedNote: {
+    color: '#9ca3af',
+    fontSize: 11,
+  },
+  calculatedDesc: {
+    color: '#d1d5db',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  sectionTitleRow: {
+    marginBottom: 8,
+  },
   optionCard: {
     flex: 1,
     backgroundColor: '#1a1a27',
@@ -603,10 +720,18 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
   },
+  quickRangeButtonActive: {
+    backgroundColor: '#6366f122',
+    borderWidth: 1,
+    borderColor: '#6366f1',
+  },
   quickRangeText: {
     color: '#a5b4fc',
     fontSize: 11,
     fontWeight: '600',
+  },
+  quickRangeTextActive: {
+    color: '#ffffff',
   },
   dateInputsRow: {
     flexDirection: 'row',
@@ -638,6 +763,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#262638',
   },
+  reminderBoxMuted: {
+    opacity: 0.6,
+  },
   timeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -649,6 +777,11 @@ const styles = StyleSheet.create({
   timeLabel: {
     color: '#d1d5db',
     fontSize: 13,
+  },
+  timeSubLabel: {
+    color: '#9ca3af',
+    fontSize: 11,
+    marginTop: 2,
   },
   timeInput: {
     backgroundColor: '#262638',

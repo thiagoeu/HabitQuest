@@ -2,6 +2,7 @@ import {
   calculateDurationFixedXp,
   calculateMilestoneXp,
   computeQuestProgress,
+  deriveHabitDifficulty,
   evaluateEligibleQuestRewards,
   getDurationTier,
   getInclusiveCalendarDays,
@@ -259,5 +260,86 @@ describe('questProgressService', () => {
     const futureSummary = computeQuestProgress(futureHabit, [], [], '2026-11-20');
     expect(futureSummary.status).toBe('futura');
     expect(futureSummary.daysRemaining).toBe(7);
+  });
+
+  test('deriveHabitDifficulty infere a dificuldade correta conforme a duracao e volume de dias programados', () => {
+    // 1 a 6 dias (curta/pontual) -> facil
+    expect(
+      deriveHabitDifficulty({
+        startDate: '2026-11-20',
+        endDate: '2026-11-22',
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      })
+    ).toBe('facil');
+
+    expect(
+      deriveHabitDifficulty({
+        startDate: '2026-11-20',
+        endDate: '2026-11-25', // 6 dias corridos
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      })
+    ).toBe('facil');
+
+    // Intervalo de 10 dias mas apenas 3 dias programados na semana -> facil por baixo volume
+    expect(
+      deriveHabitDifficulty({
+        startDate: '2026-11-20',
+        endDate: '2026-11-29',
+        daysOfWeek: [0, 6], // apenas fins de semana (3 dias no intervalo)
+      })
+    ).toBe('facil');
+
+    // 7 a 27 dias (semanal ou quinzenal) -> medio
+    expect(
+      deriveHabitDifficulty({
+        startDate: '2026-11-20',
+        endDate: '2026-11-26', // 7 dias corridos, 7 programados
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      })
+    ).toBe('medio');
+
+    expect(
+      deriveHabitDifficulty({
+        startDate: '2026-11-20',
+        endDate: '2026-12-10', // 21 dias corridos, 15 programados
+        daysOfWeek: [1, 2, 3, 4, 5],
+      })
+    ).toBe('medio');
+
+    // 28+ dias (mensal / trimestral) com 20+ programados -> dificil
+    expect(
+      deriveHabitDifficulty({
+        startDate: '2026-11-20',
+        endDate: '2026-12-25', // 36 dias corridos, 26 programados
+        daysOfWeek: [1, 2, 3, 4, 5],
+      })
+    ).toBe('dificil');
+
+    expect(
+      deriveHabitDifficulty({
+        startDate: '2026-11-01',
+        endDate: '2027-01-31', // 92 dias corridos
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      })
+    ).toBe('dificil');
+
+    // Modo continuo (sem endDate):
+    // 1 ou 2 dias na semana -> medio
+    expect(
+      deriveHabitDifficulty({
+        startDate: '2026-11-20',
+        endDate: null,
+        daysOfWeek: [1, 3],
+      })
+    ).toBe('medio');
+
+    // 3 ou mais dias na semana -> dificil
+    expect(
+      deriveHabitDifficulty({
+        startDate: '2026-11-20',
+        endDate: null,
+        daysOfWeek: [1, 2, 3, 4, 5],
+      })
+    ).toBe('dificil');
   });
 });
