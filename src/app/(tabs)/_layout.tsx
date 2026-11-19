@@ -31,6 +31,16 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="quests"
+        options={{
+          title: 'Quests',
+          headerTitle: 'Quests e Evolução',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBadgeIcon tab="quests" color={color} focused={focused} size={26} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="dungeon"
         options={{
           title: 'Cavernas',

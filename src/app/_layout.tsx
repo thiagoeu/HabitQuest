@@ -6,13 +6,15 @@ import { setupNotificationChannelAndCategories } from '../services/notificationS
 import { useAppStore } from '../store/useAppStore';
 
 export default function RootLayout() {
+  const ensureProfileDefaults = useAppStore((state) => state.ensureProfileDefaults);
   const evaluateDayChange = useAppStore((state) => state.evaluateDayChange);
 
   useEffect(() => {
-    // Configura canais de notificacao e avalia virada de dia ao iniciar
+    // Configura canais de notificacao, garante defaults legados e avalia virada de dia ao iniciar
     setupNotificationChannelAndCategories().catch(() => {});
+    ensureProfileDefaults();
     evaluateDayChange();
-  }, [evaluateDayChange]);
+  }, [ensureProfileDefaults, evaluateDayChange]);
 
   return (
     <View style={styles.container}>
@@ -31,6 +33,13 @@ export default function RootLayout() {
           options={{
             presentation: 'modal',
             title: 'Configurar Meta',
+            headerStyle: { backgroundColor: '#1e1e2d' },
+          }}
+        />
+        <Stack.Screen
+          name="quest-detail"
+          options={{
+            title: 'Evolução da Quest',
             headerStyle: { backgroundColor: '#1e1e2d' },
           }}
         />

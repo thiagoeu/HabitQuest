@@ -45,11 +45,29 @@ export default function HomeScreen() {
       uncompleteHabit(habit.id, today);
       setNotificationBanner(null);
     } else {
-      const { leveledUp, unlockedAchievements } = completeHabit(habit.id, today);
+      const { leveledUp, unlockedAchievements, unlockedQuestRewards } = completeHabit(
+        habit.id,
+        today
+      );
+      const updatedLevel = useAppStore.getState().profile.level;
 
       let feedback = `Meta '${habit.title}' concluída!`;
-      if (leveledUp) {
-        feedback = `PARABÉNS! Você subiu para o NÍVEL ${profile.level + 1}!`;
+      if (unlockedQuestRewards.length > 0) {
+        const totalBonusXp = unlockedQuestRewards.reduce((sum, r) => sum + r.xpGained, 0);
+        const primary = unlockedQuestRewards[0];
+        const bonusLabel =
+          primary.kind === 'period_perfect'
+            ? 'BÔNUS QUEST PERFEITA'
+            : primary.kind === 'period_completion'
+              ? 'BÔNUS DE QUEST CONCLUÍDA'
+              : `MARCO DE ${primary.milestoneDays} DIAS`;
+
+        feedback = `${bonusLabel}: +${totalBonusXp} XP em '${habit.title}'!`;
+        if (leveledUp) {
+          feedback += ` Você subiu para o NÍVEL ${updatedLevel}!`;
+        }
+      } else if (leveledUp) {
+        feedback = `PARABÉNS! Você subiu para o NÍVEL ${updatedLevel}!`;
       } else if (unlockedAchievements.length > 0) {
         feedback = `NOVA CONQUISTA: ${unlockedAchievements[0].title}!`;
       }

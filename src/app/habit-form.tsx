@@ -15,6 +15,16 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAppStore, getTodayDateString } from '../store/useAppStore';
 import { AttributeCategory, Difficulty } from '../types';
 import { requestNotificationPermissions } from '../services/notificationService';
+import { BASE_XP } from '../domain/gamificationEngine';
+import {
+  calculateDurationFixedXp,
+  calculateMilestoneXp,
+  getInclusiveCalendarDays,
+  getScheduledDatesInRange,
+  isValidDateString,
+  QUEST_MIN_COMPLETION_RATE,
+  SHORT_QUEST_MAX_SCHEDULED_DAYS,
+} from '../domain/questProgressService';
 
 const DAYS_OF_WEEK = [
   { day: 0, label: 'Dom' },
@@ -103,11 +113,80 @@ export default function HabitFormScreen() {
   const handleApplyQuickRange = (daysCount: number) => {
     const start = new Date();
     const end = new Date();
-    end.setDate(start.getDate() + daysCount);
+    end.setDate(start.getDate() + Math.max(0, daysCount - 1));
 
     setHasDateRange(true);
     setStartDate(getTodayDateString(start));
     setEndDate(getTodayDateString(end));
+  };
+
+  const renderXpPreviewCard = () => {
+    const dailyXp = BASE_XP[difficulty];
+    const hasCompleteBoundedRange =
+      hasDateRange &&
+      isValidDateString(startDate) &&
+      isValidDateString(endDate) &&
+      startDate <= endDate;
+
+    if (hasCompleteBoundedRange) {
+      const calendarDays = getInclusiveCalendarDays(startDate, endDate);
+      const scheduledDates = getScheduledDatesInRange(
+        { daysOfWeek: selectedDays },
+        startDate,
+        endDate
+      );
+      const scheduledCount = scheduledDates.length;
+      const xpCalc = calculateDurationFixedXp(calendarDays, difficulty, scheduledCount);
+      const minPercent =
+        scheduledCount <= SHORT_QUEST_MAX_SCHEDULED_DAYS
+          ? 100
+          : Math.round(QUEST_MIN_COMPLETION_RATE * 100);
+
+      return (
+        <View style={styles.previewCard}>
+          <Text style={styles.previewTitle}>PRÉVIA DE RECOMPENSA DA QUEST</Text>
+          <Text style={styles.previewLine}>
+            Check-in diário: +{dailyXp} XP (+20% após 3 dias de ofensiva)
+          </Text>
+          <Text style={styles.previewLine}>
+            Faixa: {xpCalc.label} • {calendarDays} dias ({scheduledCount} programados)
+          </Text>
+          {scheduledCount === 0 ? (
+            <Text style={styles.previewWarn}>
+              Nenhum dia da semana selecionado cai neste período.
+            </Text>
+          ) : (
+            <>
+              <Text style={styles.previewHighlight}>
+                Bônus fixo ao concluir ({minPercent}%+): +{xpCalc.fixedXp} XP
+              </Text>
+              {xpCalc.supportsPerfectBonus && (
+                <Text style={styles.previewPerfect}>
+                  Quest Perfeita (100%): +{xpCalc.perfectXp} XP (+20%)
+                </Text>
+              )}
+            </>
+          )}
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.previewCard}>
+        <Text style={styles.previewTitle}>PRÉVIA DE RECOMPENSA DA QUEST</Text>
+        <Text style={styles.previewLine}>
+          Check-in diário: +{dailyXp} XP (+20% após 3 dias de ofensiva)
+        </Text>
+        <Text style={styles.previewLine}>
+          Modo Contínuo: bônus acumulados por marcos de consistência:
+        </Text>
+        <Text style={styles.previewHighlight}>
+          7 dias (+{calculateMilestoneXp(7, difficulty)} XP) • 30 dias (+
+          {calculateMilestoneXp(30, difficulty)} XP) • 90 dias (+
+          {calculateMilestoneXp(90, difficulty)} XP)
+        </Text>
+      </View>
+    );
   };
 
   const handleSave = async () => {
@@ -255,24 +334,15 @@ export default function HabitFormScreen() {
             <View style={styles.calendarContainer}>
               <View style={styles.quickRangeRow}>
                 <Text style={styles.quickRangeLabel}>Atalhos:</Text>
-                <TouchableOpacity
-                  style={styles.quickRangeButton}
-                  onPress={() => handleApplyQuickRange(7)}
-                >
-                  <Text style={styles.quickRangeText}>7 dias</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.quickRangeButton}
-                  onPress={() => handleApplyQuickRange(14)}
-                >
-                  <Text style={styles.quickRangeText}>14 dias</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.quickRangeButton}
-                  onPress={() => handleApplyQuickRange(30)}
-                >
-                  <Text style={styles.quickRangeText}>30 dias</Text>
-                </TouchableOpacity>
+                {[7, 14, 30, 90].map((days) => (
+                  <TouchableOpacity
+                    key={days}
+                    style={styles.quickRangeButton}
+                    onPress={() => handleApplyQuickRange(days)}
+                  >
+                    <Text style={styles.quickRangeText}>{days} dias</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
 
               <View style={styles.dateInputsRow}>
@@ -372,6 +442,9 @@ export default function HabitFormScreen() {
             </View>
           )}
         </View>
+
+        {/* Pre-visualizacao dinamica de XP por duracao */}
+        {renderXpPreviewCard()}
 
         {/* Botoes de Acao */}
         <View style={styles.actionsContainer}>
@@ -515,6 +588,7 @@ const styles = StyleSheet.create({
   quickRangeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 12,
   },
@@ -625,5 +699,42 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     fontSize: 14,
     fontWeight: '500',
+  },
+  previewCard: {
+    backgroundColor: '#161622',
+    borderWidth: 1,
+    borderColor: '#4f46e5',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    gap: 4,
+  },
+  previewTitle: {
+    color: '#818cf8',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  previewLine: {
+    color: '#d1d5db',
+    fontSize: 12,
+  },
+  previewHighlight: {
+    color: '#a5b4fc',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  previewPerfect: {
+    color: '#34d399',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  previewWarn: {
+    color: '#fbbf24',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
   },
 });

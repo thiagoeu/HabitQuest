@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Image, StyleSheet, Text } from 'react-native';
 import { RPG_ASSETS } from '../constants/assets';
 
-export type TabType = 'today' | 'dungeon' | 'progress' | 'achievements';
+export type TabType = 'today' | 'quests' | 'dungeon' | 'progress' | 'achievements';
 
 interface TabBadgeIconProps {
   tab: TabType;
@@ -23,10 +23,14 @@ export const TabBadgeIcon: React.FC<TabBadgeIconProps> = ({
     switch (tab) {
       case 'today':
         return RPG_ASSETS.badges.today;
+      case 'quests':
+        return RPG_ASSETS.badges.quests;
       case 'dungeon':
         return RPG_ASSETS.badges.dungeon;
       case 'progress':
         return RPG_ASSETS.badges.progress;
+      case 'achievements':
+        return RPG_ASSETS.badges.achievements;
       default:
         return null;
     }
@@ -61,6 +65,32 @@ export const TabBadgeIcon: React.FC<TabBadgeIconProps> = ({
           ]}
           resizeMode="cover"
         />
+      ) : tab === 'quests' ? (
+        /* Badge heráldico de catálogo e evolução de quests */
+        <View
+          style={[
+            styles.medalBadge,
+            {
+              width: size,
+              height: size,
+              borderRadius: size * 0.24,
+              borderColor: focused ? '#818cf8' : '#475569',
+              backgroundColor: focused ? '#312e81' : '#1e1b4b',
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.medalGlyph,
+              {
+                color: focused ? '#e0e7ff' : '#94a3b8',
+                fontSize: size * 0.36,
+              },
+            ]}
+          >
+            QST
+          </Text>
+        </View>
       ) : (
         /* Badge heráldico de medalha / conquista */
         <View

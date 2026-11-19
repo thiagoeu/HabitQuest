@@ -12,7 +12,9 @@ export const RPG_ASSETS = {
   bossProcrastination: require('../../assets/images/rpg/boss_procrastination.jpg'),
   badges: {
     today: require('../../assets/images/rpg/badges/tab_today.jpg'),
+    quests: require('../../assets/images/rpg/badges/tab_quests.jpg'),
     dungeon: require('../../assets/images/rpg/badges/tab_dungeon.jpg'),
     progress: require('../../assets/images/rpg/badges/tab_progress.jpg'),
+    achievements: require('../../assets/images/rpg/badges/tab_achievements.jpg'),
   },
 };
